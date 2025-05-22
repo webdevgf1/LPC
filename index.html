@@ -335,6 +335,24 @@
             font-size: 16px;
         }
 
+        /* Connection Status */
+        .connection-status {
+            padding: 10px;
+            text-align: center;
+            background: #ffffcc;
+            border: 1px solid #ccc;
+            margin: 10px;
+            font-size: 11px;
+        }
+
+        .connection-status.connected {
+            background: #ccffcc;
+        }
+
+        .connection-status.error {
+            background: #ffcccc;
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             .main-content {
@@ -365,6 +383,10 @@
             <div class="tagline">Where the trenches live • Create chat rooms for your tokens</div>
         </div>
 
+        <div class="connection-status" id="connectionStatus">
+            🔄 Connecting to Firebase...
+        </div>
+
         <div class="nav">
             <div class="nav-btn active">💬 Chat Rooms</div>
             <div class="nav-btn" onclick="showCreateModal()">➕ Create Room</div>
@@ -378,15 +400,7 @@
                     <span>Active Rooms</span>
                 </div>
                 <div id="roomList">
-                    <div class="room-item active" onclick="selectRoom('LPC')">
-                        <div class="coin-icon" style="background: #FF6B35;">
-                            <img src="https://via.placeholder.com/32x32/FF6B35/FFFFFF?text=LPC" alt="LPC" style="width:100%;height:100%;border-radius:50%;">
-                        </div>
-                        <div class="room-info">
-                            <h3>LPC</h3>
-                            <small id="lpc-count">0 messages • 🔴 Live</small>
-                        </div>
-                    </div>
+                    <!-- Rooms will be loaded from Firebase -->
                 </div>
             </div>
 
@@ -399,7 +413,7 @@
                     <div class="chat-messages" id="chatMessages">
                         <div class="welcome-screen">
                             <h2>Welcome to Pump.Chat!</h2>
-                            <p>Select a memecoin room from the left to start chatting with fellow degens!</p>
+                            <p>Select a memecoin room from the left to start chatting with fellow degens worldwide!</p>
                             <p style="margin-top: 20px;">🚀 TO THE MOON! 🚀</p>
                         </div>
                     </div>
@@ -440,85 +454,137 @@
     </div>
 
     <div class="status-bar">
-        <span>Ready • Pump.Chat v1.0</span>
+        <span id="statusText">Ready • Pump.Chat v1.0</span>
         <span id="currentTime"></span>
     </div>
 
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+
     <script>
+        // Firebase Configuration
+        // REPLACE THESE WITH YOUR ACTUAL FIREBASE CONFIG
+        const firebaseConfig = {
+            apiKey: "your-api-key-here",
+            authDomain: "your-project.firebaseapp.com",
+            projectId: "your-project-id",
+            storageBucket: "your-project.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "your-app-id"
+        };
+
+        // Initialize Firebase
+        let db, storage;
         let currentRoomName = '';
-        let rooms = {
-            'LPC': []
-        };
-        let roomImages = {
-            'LPC': 'https://via.placeholder.com/32x32/FF6B35/FFFFFF?text=LPC'
-        };
+        let currentUser = 'Anon' + Math.floor(Math.random() * 10000);
+        let messageListeners = {};
 
-        // Simple storage simulation - in real app this would be a backend database
-        function saveToStorage() {
+        function initializeFirebase() {
             try {
-                localStorage.setItem('pumpChatRooms', JSON.stringify(rooms));
-                localStorage.setItem('pumpChatImages', JSON.stringify(roomImages));
-            } catch(e) {
-                // Storage not available, continue without persistence
+                firebase.initializeApp(firebaseConfig);
+                db = firebase.firestore();
+                storage = firebase.storage();
+                
+                updateConnectionStatus('connected', '✅ Connected to Firebase - Global chat active!');
+                
+                // Create default LPC room if it doesn't exist
+                createDefaultRoom();
+                
+                // Load rooms
+                loadRooms();
+                
+            } catch (error) {
+                console.error('Firebase initialization error:', error);
+                updateConnectionStatus('error', '❌ Firebase connection failed. Please check configuration.');
             }
         }
 
-        function loadFromStorage() {
-            try {
-                const savedRooms = localStorage.getItem('pumpChatRooms');
-                const savedImages = localStorage.getItem('pumpChatImages');
-                if (savedRooms) {
-                    rooms = JSON.parse(savedRooms);
-                }
-                if (savedImages) {
-                    roomImages = JSON.parse(savedImages);
-                }
-            } catch(e) {
-                // Storage not available, use defaults
+        function updateConnectionStatus(status, message) {
+            const statusElement = document.getElementById('connectionStatus');
+            const statusText = document.getElementById('statusText');
+            
+            statusElement.className = `connection-status ${status}`;
+            statusElement.textContent = message;
+            
+            if (status === 'connected') {
+                statusText.textContent = 'Connected • Global Chat Active';
+            } else if (status === 'error') {
+                statusText.textContent = 'Offline • Firebase Error';
             }
         }
 
-        // Simulate real-time updates by checking for new messages periodically
-        function checkForUpdates() {
-            // In a real app, this would poll a server or use WebSockets
-            // For simulation, we'll check localStorage for changes from other tabs
+        async function createDefaultRoom() {
             try {
-                const savedRooms = localStorage.getItem('pumpChatRooms');
-                if (savedRooms) {
-                    const newRooms = JSON.parse(savedRooms);
-                    
-                    // Check if current room has new messages
-                    if (currentRoomName && newRooms[currentRoomName]) {
-                        const currentMessages = rooms[currentRoomName] || [];
-                        const newMessages = newRooms[currentRoomName] || [];
-                        
-                        if (newMessages.length > currentMessages.length) {
-                            // Update rooms and reload messages
-                            rooms = newRooms;
-                            loadMessages(currentRoomName);
-                            updateAllMessageCounts();
-                        }
-                    }
-                    
-                    // Update rooms data
-                    rooms = newRooms;
+                const roomRef = db.collection('rooms').doc('LPC');
+                const roomDoc = await roomRef.get();
+                
+                if (!roomDoc.exists) {
+                    await roomRef.set({
+                        name: 'LPC',
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        imageUrl: 'https://via.placeholder.com/32x32/FF6B35/FFFFFF?text=LPC',
+                        messageCount: 0
+                    });
                 }
-            } catch(e) {
-                // Storage not available
+            } catch (error) {
+                console.error('Error creating default room:', error);
             }
         }
 
-        function updateTime() {
-            const now = new Date();
-            const timeStr = now.toLocaleTimeString('en-US', { 
-                hour12: false, 
-                hour: '2-digit', 
-                minute: '2-digit' 
-            });
-            document.getElementById('currentTime').textContent = timeStr;
+        async function loadRooms() {
+            try {
+                const roomsSnapshot = await db.collection('rooms').orderBy('createdAt').get();
+                const roomList = document.getElementById('roomList');
+                roomList.innerHTML = '';
+
+                roomsSnapshot.forEach((doc) => {
+                    const room = doc.data();
+                    addRoomToUI(doc.id, room);
+                });
+
+                // Auto-select LPC room
+                if (roomsSnapshot.docs.length > 0) {
+                    setTimeout(() => selectRoom('LPC'), 100);
+                }
+
+            } catch (error) {
+                console.error('Error loading rooms:', error);
+            }
         }
 
-        function selectRoom(roomName) {
+        function addRoomToUI(roomId, roomData) {
+            const roomList = document.getElementById('roomList');
+            const roomDiv = document.createElement('div');
+            roomDiv.className = 'room-item';
+            roomDiv.onclick = () => selectRoom(roomId);
+            
+            const colors = ['#FF6B35', '#4CAF50', '#FFC107', '#FF5722', '#795548', '#9C27B0', '#2196F3'];
+            const randomColor = colors[Math.floor(Math.random() * colors.length)];
+            
+            roomDiv.innerHTML = `
+                <div class="coin-icon" style="background: ${randomColor};">
+                    <img src="${roomData.imageUrl}" alt="${roomData.name}" 
+                         style="width:100%;height:100%;border-radius:50%;object-fit:cover;" 
+                         onerror="this.src='https://via.placeholder.com/32x32/${randomColor.substring(1)}/FFFFFF?text=${roomData.name.substring(0,3)}'">
+                </div>
+                <div class="room-info">
+                    <h3>${roomData.name}</h3>
+                    <small>${roomData.messageCount || 0} messages • 🔴 Live</small>
+                </div>
+            `;
+            
+            roomList.appendChild(roomDiv);
+        }
+
+        async function selectRoom(roomName) {
+            // Clean up previous listener
+            if (messageListeners[currentRoomName]) {
+                messageListeners[currentRoomName]();
+                delete messageListeners[currentRoomName];
+            }
+
             currentRoomName = roomName;
             
             // Update UI
@@ -529,23 +595,37 @@
             
             document.getElementById('currentRoom').textContent = `💬 ${roomName} Chat`;
             document.getElementById('messageInput').disabled = false;
-            document.getElementById('messageInput').placeholder = `Chat in ${roomName} room...`;
+            document.getElementById('messageInput').placeholder = `Chat globally in ${roomName} room...`;
             
-            // Load messages
+            // Load messages and set up real-time listener
             loadMessages(roomName);
         }
 
-        function loadMessages(roomName) {
-            const messagesContainer = document.getElementById('chatMessages');
-            messagesContainer.innerHTML = '';
-            
-            if (rooms[roomName]) {
-                rooms[roomName].forEach(msg => {
-                    addMessageToChat(msg.user, msg.message, msg.time);
-                });
+        async function loadMessages(roomName) {
+            try {
+                const messagesContainer = document.getElementById('chatMessages');
+                messagesContainer.innerHTML = '';
+                
+                // Set up real-time listener for new messages
+                const unsubscribe = db.collection('rooms').doc(roomName).collection('messages')
+                    .orderBy('timestamp')
+                    .onSnapshot((snapshot) => {
+                        messagesContainer.innerHTML = '';
+                        
+                        snapshot.forEach((doc) => {
+                            const message = doc.data();
+                            addMessageToChat(message.user, message.text, message.time);
+                        });
+                        
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    });
+                
+                // Store the unsubscribe function
+                messageListeners[roomName] = unsubscribe;
+                
+            } catch (error) {
+                console.error('Error loading messages:', error);
             }
-            
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
 
         function addMessageToChat(user, message, time) {
@@ -560,47 +640,95 @@
             `;
             
             messagesContainer.appendChild(messageDiv);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
 
-        function sendMessage() {
+        async function sendMessage() {
             const input = document.getElementById('messageInput');
             const message = input.value.trim();
             
-            if (message && currentRoomName) {
-                const now = new Date();
-                const timeStr = now.toLocaleTimeString('en-US', { 
-                    hour12: false, 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                });
-                
-                // Generate a random username for demo (in real app, this would be user's wallet address or username)
-                const usernames = ['Anon', 'CryptoChad', 'MoonBoy', 'DiamondHands', 'ApeStrong', 'DegenKing', 'TokenMaster'];
-                const username = usernames[Math.floor(Math.random() * usernames.length)] + Math.floor(Math.random() * 1000);
-                
-                // Add to room data
-                if (!rooms[currentRoomName]) {
-                    rooms[currentRoomName] = [];
+            if (message && currentRoomName && db) {
+                try {
+                    const now = new Date();
+                    const timeStr = now.toLocaleTimeString('en-US', { 
+                        hour12: false, 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                    });
+                    
+                    // Add message to Firebase
+                    await db.collection('rooms').doc(currentRoomName).collection('messages').add({
+                        user: currentUser,
+                        text: message,
+                        time: timeStr,
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    
+                    // Update room message count
+                    await db.collection('rooms').doc(currentRoomName).update({
+                        messageCount: firebase.firestore.FieldValue.increment(1)
+                    });
+                    
+                    // Clear input
+                    input.value = '';
+                    
+                } catch (error) {
+                    console.error('Error sending message:', error);
+                    alert('Failed to send message. Please try again.');
                 }
-                rooms[currentRoomName].push({
-                    user: username,
-                    message: message,
-                    time: timeStr,
-                    timestamp: Date.now()
-                });
-                
-                // Save to storage for persistence and sharing
-                saveToStorage();
-                
-                // Add to chat display
-                addMessageToChat(username, message, timeStr);
-                
-                // Update message count
-                updateMessageCount(currentRoomName);
-                
-                // Clear input
-                input.value = '';
+            }
+        }
+
+        async function createRoom() {
+            const tokenName = document.getElementById('tokenName').value.trim().toUpperCase();
+            const tokenImageFile = document.getElementById('tokenImageFile').files[0];
+            
+            if (tokenName && db) {
+                try {
+                    // Check if room already exists
+                    const roomDoc = await db.collection('rooms').doc(tokenName).get();
+                    if (roomDoc.exists) {
+                        alert('Room already exists!');
+                        return;
+                    }
+                    
+                    let imageUrl = `https://via.placeholder.com/32x32/4CAF50/FFFFFF?text=${tokenName.substring(0,3)}`;
+                    
+                    // Upload image if provided
+                    if (tokenImageFile) {
+                        const storageRef = storage.ref(`room-images/${tokenName}`);
+                        const uploadTask = await storageRef.put(tokenImageFile);
+                        imageUrl = await uploadTask.ref.getDownloadURL();
+                    }
+                    
+                    // Create room in Firebase
+                    await db.collection('rooms').doc(tokenName).set({
+                        name: tokenName,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        imageUrl: imageUrl,
+                        messageCount: 0
+                    });
+                    
+                    // Add to UI
+                    addRoomToUI(tokenName, {
+                        name: tokenName,
+                        imageUrl: imageUrl,
+                        messageCount: 0
+                    });
+                    
+                    hideCreateModal();
+                    
+                    // Auto-select the new room
+                    setTimeout(() => {
+                        const newRoomElement = Array.from(document.querySelectorAll('.room-item')).find(
+                            item => item.querySelector('h3').textContent === tokenName
+                        );
+                        if (newRoomElement) newRoomElement.click();
+                    }, 100);
+                    
+                } catch (error) {
+                    console.error('Error creating room:', error);
+                    alert('Failed to create room. Please try again.');
+                }
             }
         }
 
@@ -616,84 +744,14 @@
             document.getElementById('tokenImageFile').value = '';
         }
 
-        function createRoom() {
-            const tokenName = document.getElementById('tokenName').value.trim().toUpperCase();
-            const tokenImageFile = document.getElementById('tokenImageFile').files[0];
-            
-            if (tokenName) {
-                // Check if room already exists
-                if (rooms[tokenName]) {
-                    alert('Room already exists!');
-                    return;
-                }
-                
-                // Handle image upload
-                if (tokenImageFile) {
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        const imageDataUrl = e.target.result;
-                        createRoomWithImage(tokenName, imageDataUrl);
-                    };
-                    reader.readAsDataURL(tokenImageFile);
-                } else {
-                    // Create room with placeholder image
-                    const colors = ['#4CAF50', '#FFC107', '#FF5722', '#795548', '#9C27B0', '#2196F3'];
-                    const randomColor = colors[Math.floor(Math.random() * colors.length)];
-                    const placeholderImage = `https://via.placeholder.com/32x32/${randomColor.substring(1)}/FFFFFF?text=${tokenName.substring(0,3)}`;
-                    createRoomWithImage(tokenName, placeholderImage);
-                }
-            }
-        }
-
-        function createRoomWithImage(tokenName, imageUrl) {
-            // Add new room to the list
-            const roomList = document.getElementById('roomList');
-            const roomDiv = document.createElement('div');
-            roomDiv.className = 'room-item';
-            roomDiv.onclick = () => selectRoom(tokenName);
-            
-            const colors = ['#4CAF50', '#FFC107', '#FF5722', '#795548', '#9C27B0', '#2196F3'];
-            const randomColor = colors[Math.floor(Math.random() * colors.length)];
-            
-            roomDiv.innerHTML = `
-                <div class="coin-icon" style="background: ${randomColor};">
-                    <img src="${imageUrl}" alt="${tokenName}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" onerror="this.src='https://via.placeholder.com/32x32/${randomColor.substring(1)}/FFFFFF?text=${tokenName.substring(0,3)}'">
-                </div>
-                <div class="room-info">
-                    <h3>${tokenName}</h3>
-                    <small id="${tokenName.toLowerCase()}-count">0 messages • 🔴 Live</small>
-                </div>
-            `;
-            
-            roomList.appendChild(roomDiv);
-            
-            // Initialize empty room and store image
-            rooms[tokenName] = [];
-            roomImages[tokenName] = imageUrl;
-            
-            // Save to storage
-            saveToStorage();
-            
-            hideCreateModal();
-            
-            // Auto-select the new room
-            setTimeout(() => {
-                roomDiv.click();
-            }, 100);
-        }
-
-        function updateAllMessageCounts() {
-            Object.keys(rooms).forEach(roomName => {
-                updateMessageCount(roomName);
+        function updateTime() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('en-US', { 
+                hour12: false, 
+                hour: '2-digit', 
+                minute: '2-digit' 
             });
-        }
-
-        function updateMessageCount(roomName) {
-            const countElement = document.getElementById(`${roomName.toLowerCase()}-count`);
-            if (countElement) {
-                const messageCount = rooms[roomName] ? rooms[roomName].length : 0;
-                countElement.textContent = `${messageCount} messages • 🔴 Live`;
-            }
+            document.getElementById('currentTime').textContent = timeStr;
         }
 
         // Event listeners
@@ -704,48 +762,11 @@
         });
 
         // Initialize
-        loadFromStorage(); // Load existing rooms and messages
         updateTime();
         setInterval(updateTime, 1000);
         
-        // Check for new messages every 2 seconds (simulates real-time)
-        setInterval(checkForUpdates, 2000);
-        
-        // Load existing rooms into UI
-        function initializeRooms() {
-            const roomList = document.getElementById('roomList');
-            roomList.innerHTML = ''; // Clear existing
-            
-            Object.keys(rooms).forEach(roomName => {
-                const roomDiv = document.createElement('div');
-                roomDiv.className = 'room-item';
-                if (roomName === 'LPC') roomDiv.classList.add('active');
-                roomDiv.onclick = () => selectRoom(roomName);
-                
-                const colors = ['#FF6B35', '#4CAF50', '#FFC107', '#FF5722', '#795548', '#9C27B0', '#2196F3'];
-                const randomColor = colors[Math.floor(Math.random() * colors.length)];
-                const imageUrl = roomImages[roomName] || `https://via.placeholder.com/32x32/${randomColor.substring(1)}/FFFFFF?text=${roomName.substring(0,3)}`;
-                
-                roomDiv.innerHTML = `
-                    <div class="coin-icon" style="background: ${randomColor};">
-                        <img src="${imageUrl}" alt="${roomName}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" onerror="this.src='https://via.placeholder.com/32x32/${randomColor.substring(1)}/FFFFFF?text=${roomName.substring(0,3)}'">
-                    </div>
-                    <div class="room-info">
-                        <h3>${roomName}</h3>
-                        <small id="${roomName.toLowerCase()}-count">${rooms[roomName].length} messages • 🔴 Live</small>
-                    </div>
-                `;
-                
-                roomList.appendChild(roomDiv);
-            });
-        }
-        
-        initializeRooms();
-        
-        // Auto-select LPC room on load
-        setTimeout(() => {
-            selectRoom('LPC');
-        }, 100);
+        // Initialize Firebase when page loads
+        initializeFirebase();
     </script>
 </body>
 </html>
