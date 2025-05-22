@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pump.Chat - Where The Memes Live</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'MS Sans Serif', sans-serif;
+            font-size: 11px;
+            background: #c0c0c0;
+            color: #000;
+            overflow-x: hidden;
+        }
+
+        /* Windows 98 Window Styling */
+        .window {
+            background: #c0c0c0;
+            border: 2px outset #c0c0c0;
+            margin: 10px;
+        }
+
+        .window-title {
+            background: linear-gradient(90deg, #0a246a 0%, #a6caf0 100%);
+            color: white;
+            padding: 2px 4px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .window-controls {
+            display: flex;
+            gap: 2px;
+        }
+
+        .control-btn {
+            width: 16px;
+            height: 14px;
+            background: #c0c0c0;
+            border: 1px outset #c0c0c0;
+            font-size: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .control-btn:active {
+            border: 1px inset #c0c0c0;
+        }
+
+        /* Header */
+        .header {
+            background: #c0c0c0;
+            padding: 20px;
+            text-align: center;
+            border-bottom: 2px inset #c0c0c0;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #0a246a;
+            margin-bottom: 10px;
+        }
+
+        .tagline {
+            font-size: 12px;
+            margin-bottom: 20px;
+        }
+
+        /* Navigation */
+        .nav {
+            background: #c0c0c0;
+            padding: 10px;
+            border-bottom: 1px inset #c0c0c0;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .nav-btn {
+            background: #c0c0c0;
+            border: 2px outset #c0c0c0;
+            padding: 4px 12px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+
+        .nav-btn:active, .nav-btn.active {
+            border: 2px inset #c0c0c0;
+        }
+
+        /* Main Content */
+        .main-content {
+            display: flex;
+            height: calc(100vh - 200px);
+            gap: 10px;
+            padding: 10px;
+        }
+
+        /* Room List */
+        .room-list {
+            width: 300px;
+            background: white;
+            border: 2px inset #c0c0c0;
+            overflow-y: auto;
+        }
+
+        .room-item {
+            padding: 8px;
+            border-bottom: 1px solid #c0c0c0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .room-item:hover {
+            background: #316ac5;
+            color: white;
+        }
+
+        .room-item.active {
+            background: #316ac5;
+            color: white;
+        }
+
+        .coin-icon {
+            width: 32px;
+            height: 32px;
+            background: #ffff00;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 12px;
+        }
+
+        .room-info h3 {
+            font-size: 12px;
+            margin-bottom: 2px;
+        }
+
+        .room-info small {
+            color: #666;
+            font-size: 10px;
+        }
+
+        .room-item.active .room-info small {
+            color: #ccc;
+        }
+
+        /* Chat Area */
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            background: #c0c0c0;
+            padding: 8px;
+            border: 2px outset #c0c0c0;
+            font-weight: bold;
+        }
+
+        .chat-messages {
+            flex: 1;
+            background: white;
+            border: 2px inset #c0c0c0;
+            overflow-y: auto;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        .message {
+            margin-bottom: 5px;
+            word-wrap: break-word;
+        }
+
+        .message-time {
+            color: #666;
+            font-size: 10px;
+        }
+
+        .message-user {
+            font-weight: bold;
+            color: #0a246a;
+        }
+
+        .chat-input-container {
+            display: flex;
+            gap: 5px;
+            padding: 5px;
+            background: #c0c0c0;
+            border: 2px outset #c0c0c0;
+        }
+
+        .chat-input {
+            flex: 1;
+            border: 2px inset #c0c0c0;
+            padding: 4px;
+            font-family: 'MS Sans Serif', sans-serif;
+            font-size: 11px;
+        }
+
+        .send-btn {
+            background: #c0c0c0;
+            border: 2px outset #c0c0c0;
+            padding: 4px 12px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+
+        .send-btn:active {
+            border: 2px inset #c0c0c0;
+        }
+
+        /* Create Room Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+            background: #c0c0c0;
+            border: 2px outset #c0c0c0;
+            min-width: 400px;
+        }
+
+        .modal-content {
+            padding: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .form-group input {
+            width: 100%;
+            border: 2px inset #c0c0c0;
+            padding: 4px;
+            font-size: 11px;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .btn {
+            background: #c0c0c0;
+            border: 2px outset #c0c0c0;
+            padding: 6px 16px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+
+        .btn:active {
+            border: 2px inset #c0c0c0;
+        }
+
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+
+        /* Status Bar */
+        .status-bar {
+            background: #c0c0c0;
+            border-top: 1px solid #808080;
+            padding: 4px 10px;
+            font-size: 10px;
+            display: flex;
+            justify-content: space-between;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 16px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #c0c0c0;
+            border: 1px inset #c0c0c0;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #c0c0c0;
+            border: 1px outset #c0c0c0;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a0a0a0;
+        }
+
+        /* Welcome Screen */
+        .welcome-screen {
+            text-align: center;
+            padding: 50px;
+            color: #666;
+        }
+
+        .welcome-screen h2 {
+            margin-bottom: 20px;
+            font-size: 16px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .main-content {
+                flex-direction: column;
+                height: auto;
+            }
+            
+            .room-list {
+                width: 100%;
+                height: 200px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="window">
+        <div class="window-title">
+            <span>🚀 Pump.Chat - Where The Memes Live</span>
+            <div class="window-controls">
+                <div class="control-btn">_</div>
+                <div class="control-btn">□</div>
+                <div class="control-btn">×</div>
+            </div>
+        </div>
+
+        <div class="header">
+            <div class="logo">PUMP.CHAT</div>
+            <div class="tagline">Where the trenches live • Create chat rooms for your tokens</div>
+        </div>
+
+        <div class="nav">
+            <div class="nav-btn active">💬 Chat Rooms</div>
+            <div class="nav-btn" onclick="showCreateModal()">➕ Create Room</div>
+            <div class="nav-btn">🔥 Trending</div>
+            <div class="nav-btn">📊 Stats</div>
+        </div>
+
+        <div class="main-content">
+            <div class="window room-list">
+                <div class="window-title">
+                    <span>Active Rooms</span>
+                </div>
+                <div id="roomList">
+                    <div class="room-item active" onclick="selectRoom('LPC')">
+                        <div class="coin-icon" style="background: #FF6B35;">
+                            <img src="https://via.placeholder.com/32x32/FF6B35/FFFFFF?text=LPC" alt="LPC" style="width:100%;height:100%;border-radius:50%;">
+                        </div>
+                        <div class="room-info">
+                            <h3>LPC</h3>
+                            <small id="lpc-count">0 messages • 🔴 Live</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat-container">
+                <div class="window">
+                    <div class="window-title">
+                        <span id="currentRoom">💬 Select a room to start chatting</span>
+                    </div>
+                    
+                    <div class="chat-messages" id="chatMessages">
+                        <div class="welcome-screen">
+                            <h2>Welcome to Pump.Chat!</h2>
+                            <p>Select a memecoin room from the left to start chatting with fellow degens!</p>
+                            <p style="margin-top: 20px;">🚀 TO THE MOON! 🚀</p>
+                        </div>
+                    </div>
+
+                    <div class="chat-input-container">
+                        <input type="text" class="chat-input" id="messageInput" placeholder="Type your message..." disabled>
+                        <div class="send-btn" onclick="sendMessage()">Send</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Room Modal -->
+    <div class="overlay" id="overlay" onclick="hideCreateModal()"></div>
+    <div class="modal" id="createModal">
+        <div class="window-title">
+            <span>Create New Room</span>
+            <div class="window-controls">
+                <div class="control-btn" onclick="hideCreateModal()">×</div>
+            </div>
+        </div>
+        <div class="modal-content">
+            <div class="form-group">
+                <label>Token Name:</label>
+                <input type="text" id="tokenName" placeholder="e.g., PEPE, DOGE, BONK">
+            </div>
+            <div class="form-group">
+                <label>Token Image URL:</label>
+                <input type="url" id="tokenImage" placeholder="https://example.com/token-image.png">
+            </div>
+            <div class="modal-buttons">
+                <div class="btn" onclick="hideCreateModal()">Cancel</div>
+                <div class="btn" onclick="createRoom()">Create Room</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <span>Ready • Pump.Chat v1.0</span>
+        <span id="currentTime"></span>
+    </div>
+
+    <script>
+        let currentRoomName = '';
+        let rooms = {
+            'LPC': []
+        };
+
+        function updateTime() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('en-US', { 
+                hour12: false, 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+            document.getElementById('currentTime').textContent = timeStr;
+        }
+
+        function selectRoom(roomName) {
+            currentRoomName = roomName;
+            
+            // Update UI
+            document.querySelectorAll('.room-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.target.closest('.room-item').classList.add('active');
+            
+            document.getElementById('currentRoom').textContent = `💬 ${roomName} Chat`;
+            document.getElementById('messageInput').disabled = false;
+            document.getElementById('messageInput').placeholder = `Chat in ${roomName} room...`;
+            
+            // Load messages
+            loadMessages(roomName);
+        }
+
+        function loadMessages(roomName) {
+            const messagesContainer = document.getElementById('chatMessages');
+            messagesContainer.innerHTML = '';
+            
+            if (rooms[roomName]) {
+                rooms[roomName].forEach(msg => {
+                    addMessageToChat(msg.user, msg.message, msg.time);
+                });
+            }
+            
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function addMessageToChat(user, message, time) {
+            const messagesContainer = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message';
+            
+            messageDiv.innerHTML = `
+                <span class="message-time">[${time}]</span> 
+                <span class="message-user">${user}:</span> 
+                ${message}
+            `;
+            
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (message && currentRoomName) {
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString('en-US', { 
+                    hour12: false, 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+                
+                // Add to room data
+                if (!rooms[currentRoomName]) {
+                    rooms[currentRoomName] = [];
+                }
+                rooms[currentRoomName].push({
+                    user: 'You',
+                    message: message,
+                    time: timeStr
+                });
+                
+                // Add to chat display
+                addMessageToChat('You', message, timeStr);
+                
+                // Update message count
+                updateMessageCount(currentRoomName);
+                
+                // Clear input
+                input.value = '';
+            }
+        }
+
+        function showCreateModal() {
+            document.getElementById('overlay').style.display = 'block';
+            document.getElementById('createModal').style.display = 'block';
+        }
+
+        function hideCreateModal() {
+            document.getElementById('overlay').style.display = 'none';
+            document.getElementById('createModal').style.display = 'none';
+            document.getElementById('tokenName').value = '';
+            document.getElementById('tokenImage').value = '';
+        }
+
+        function createRoom() {
+            const tokenName = document.getElementById('tokenName').value.trim().toUpperCase();
+            const tokenImage = document.getElementById('tokenImage').value.trim();
+            
+            if (tokenName) {
+                // Check if room already exists
+                if (rooms[tokenName]) {
+                    alert('Room already exists!');
+                    return;
+                }
+                
+                // Add new room to the list
+                const roomList = document.getElementById('roomList');
+                const roomDiv = document.createElement('div');
+                roomDiv.className = 'room-item';
+                roomDiv.onclick = () => selectRoom(tokenName);
+                
+                const colors = ['#4CAF50', '#FFC107', '#FF5722', '#795548', '#9C27B0', '#2196F3'];
+                const randomColor = colors[Math.floor(Math.random() * colors.length)];
+                
+                let iconContent;
+                if (tokenImage && tokenImage.startsWith('http')) {
+                    iconContent = `<img src="${tokenImage}" alt="${tokenName}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+                } else {
+                    iconContent = `<img src="https://via.placeholder.com/32x32/${randomColor.substring(1)}/FFFFFF?text=${tokenName.substring(0,3)}" alt="${tokenName}" style="width:100%;height:100%;border-radius:50%;">`;
+                }
+                
+                roomDiv.innerHTML = `
+                    <div class="coin-icon" style="background: ${randomColor};">
+                        ${iconContent}
+                    </div>
+                    <div class="room-info">
+                        <h3>${tokenName}</h3>
+                        <small id="${tokenName.toLowerCase()}-count">0 messages • 🔴 Live</small>
+                    </div>
+                `;
+                
+                roomList.appendChild(roomDiv);
+                
+                // Initialize empty room
+                rooms[tokenName] = [];
+                
+                hideCreateModal();
+                
+                // Auto-select the new room
+                setTimeout(() => {
+                    roomDiv.click();
+                }, 100);
+            }
+        }
+
+        function updateMessageCount(roomName) {
+            const countElement = document.getElementById(`${roomName.toLowerCase()}-count`);
+            if (countElement) {
+                const messageCount = rooms[roomName] ? rooms[roomName].length : 0;
+                countElement.textContent = `${messageCount} messages • 🔴 Live`;
+            }
+        }
+
+        // Event listeners
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // Initialize
+        updateTime();
+        setInterval(updateTime, 1000);
+        
+        // Auto-select LPC room on load
+        setTimeout(() => {
+            selectRoom('LPC');
+        }, 100);
+    </script>
+</body>
+</html>
