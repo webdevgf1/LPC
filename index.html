@@ -215,6 +215,19 @@
             font-size: 11px;
         }
 
+        .image-btn {
+            background: #c0c0c0;
+            border: 2px outset #c0c0c0;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: 11px;
+            min-width: 60px;
+        }
+
+        .image-btn:active {
+            border: 2px inset #c0c0c0;
+        }
+
         .send-btn {
             background: #c0c0c0;
             border: 2px outset #c0c0c0;
@@ -225,6 +238,25 @@
 
         .send-btn:active {
             border: 2px inset #c0c0c0;
+        }
+
+        .message-image {
+            max-width: 300px;
+            max-height: 200px;
+            border: 1px solid #ccc;
+            margin: 5px 0;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+
+        .message-image:hover {
+            opacity: 0.8;
+        }
+
+        .uploading {
+            opacity: 0.6;
+            font-style: italic;
+            color: #666;
         }
 
         /* Create Room Modal */
@@ -420,6 +452,8 @@
 
                     <div class="chat-input-container">
                         <input type="text" class="chat-input" id="messageInput" placeholder="Type your message..." disabled>
+                        <input type="file" id="imageInput" accept="image/*" style="display: none;" onchange="sendImage()">
+                        <div class="image-btn" onclick="document.getElementById('imageInput').click()">📷 Image</div>
                         <div class="send-btn" onclick="sendMessage()">Send</div>
                     </div>
                 </div>
@@ -455,6 +489,7 @@
 
     <div class="status-bar">
         <span id="statusText">Ready • Pump.Chat v1.0</span>
+        <span id="userInfo">👤 Loading...</span>
         <span id="currentTime"></span>
     </div>
 
@@ -462,24 +497,42 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
-
     <script>
         // Firebase Configuration
         // REPLACE THESE WITH YOUR ACTUAL FIREBASE CONFIG
         const firebaseConfig = {
             apiKey: "AIzaSyAYq53oPhMOZVmrRJbUmcmFsmLpzeow6EM",
             authDomain: "pump-chat-7b037.firebaseapp.com",
+            databaseURL: "https://pump-chat-7b037-default-rtdb.firebaseio.com",
             projectId: "pump-chat-7b037",
             storageBucket: "pump-chat-7b037.firebasestorage.app",
             messagingSenderId: "395023438839",
-            appId: "1:395023438839:web:4559ab61e03be5a16f54f2"
+            appId: "1:395023438839:web:4559ab61e03be5a16f54f2",
+            measurementId: "G-G8BQR7BW7K"
         };
 
         // Initialize Firebase
         let db, storage;
         let currentRoomName = '';
-        let currentUser = 'Anon' + Math.floor(Math.random() * 10000);
+        let currentUser = getUserId();
         let messageListeners = {};
+
+        function getUserId() {
+            // Check if user already has an ID stored
+            let userId = localStorage.getItem('pumpChatUserId');
+            if (!userId) {
+                // Generate new unique user ID
+                const adjectives = ['Diamond', 'Moon', 'Rocket', 'Crypto', 'Degen', 'Based', 'Chad', 'Ape', 'Bull', 'Lion'];
+                const nouns = ['Hands', 'Walker', 'Trader', 'Hodler', 'King', 'Master', 'Legend', 'Warrior', 'Hunter', 'Boss'];
+                const randomAdj = adjectives[Math.floor(Math.random() * adjectives.length)];
+                const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
+                const randomNum = Math.floor(Math.random() * 1000);
+                
+                userId = `${randomAdj}${randomNoun}${randomNum}`;
+                localStorage.setItem('pumpChatUserId', userId);
+            }
+            return userId;
+        }
 
         function initializeFirebase() {
             try {
@@ -614,7 +667,7 @@
                         
                         snapshot.forEach((doc) => {
                             const message = doc.data();
-                            addMessageToChat(message.user, message.text, message.time);
+                            addMessageToChat(message.user, message.text || '', message.time, message.imageUrl);
                         });
                         
                         messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -628,17 +681,26 @@
             }
         }
 
-        function addMessageToChat(user, message, time) {
+        function addMessageToChat(user, message, time, imageUrl = null) {
             const messagesContainer = document.getElementById('chatMessages');
             const messageDiv = document.createElement('div');
             messageDiv.className = 'message';
             
-            messageDiv.innerHTML = `
+            let content = `
                 <span class="message-time">[${time}]</span> 
                 <span class="message-user">${user}:</span> 
-                ${message}
             `;
             
+            if (imageUrl) {
+                content += `<br><img src="${imageUrl}" alt="Shared image" class="message-image" onclick="window.open('${imageUrl}', '_blank')">`;
+                if (message) {
+                    content += `<br>${message}`;
+                }
+            } else {
+                content += message;
+            }
+            
+            messageDiv.innerHTML = content;
             messagesContainer.appendChild(messageDiv);
         }
 
@@ -674,6 +736,68 @@
                 } catch (error) {
                     console.error('Error sending message:', error);
                     alert('Failed to send message. Please try again.');
+                }
+            }
+        }
+
+        async function sendImage() {
+            const fileInput = document.getElementById('imageInput');
+            const file = fileInput.files[0];
+            
+            if (file && currentRoomName && db) {
+                try {
+                    // Show uploading message
+                    const messagesContainer = document.getElementById('chatMessages');
+                    const uploadingDiv = document.createElement('div');
+                    uploadingDiv.className = 'message uploading';
+                    uploadingDiv.innerHTML = `
+                        <span class="message-time">[${new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}]</span> 
+                        <span class="message-user">${currentUser}:</span> 
+                        📤 Uploading image...
+                    `;
+                    messagesContainer.appendChild(uploadingDiv);
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    
+                    // Upload image to Firebase Storage
+                    const timestamp = Date.now();
+                    const storageRef = storage.ref(`chat-images/${currentRoomName}/${timestamp}_${file.name}`);
+                    const uploadTask = await storageRef.put(file);
+                    const imageUrl = await uploadTask.ref.getDownloadURL();
+                    
+                    // Remove uploading message
+                    uploadingDiv.remove();
+                    
+                    const now = new Date();
+                    const timeStr = now.toLocaleTimeString('en-US', { 
+                        hour12: false, 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                    });
+                    
+                    // Add image message to Firebase
+                    await db.collection('rooms').doc(currentRoomName).collection('messages').add({
+                        user: currentUser,
+                        text: '', // No text for image-only messages
+                        imageUrl: imageUrl,
+                        time: timeStr,
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    
+                    // Update room message count
+                    await db.collection('rooms').doc(currentRoomName).update({
+                        messageCount: firebase.firestore.FieldValue.increment(1)
+                    });
+                    
+                    // Clear file input
+                    fileInput.value = '';
+                    
+                } catch (error) {
+                    console.error('Error sending image:', error);
+                    alert('Failed to send image. Please try again.');
+                    
+                    // Remove uploading message on error
+                    const uploadingMessages = document.querySelectorAll('.uploading');
+                    uploadingMessages.forEach(msg => msg.remove());
                 }
             }
         }
@@ -764,6 +888,9 @@
         // Initialize
         updateTime();
         setInterval(updateTime, 1000);
+        
+        // Update user info in status bar
+        document.getElementById('userInfo').textContent = `👤 ${currentUser}`;
         
         // Initialize Firebase when page loads
         initializeFirebase();
