@@ -428,8 +428,9 @@
                 <input type="text" id="tokenName" placeholder="e.g., PEPE, DOGE, BONK">
             </div>
             <div class="form-group">
-                <label>Token Image URL:</label>
-                <input type="url" id="tokenImage" placeholder="https://example.com/token-image.png">
+                <label>Token Image:</label>
+                <input type="file" id="tokenImageFile" accept="image/*" style="width:100%;border:2px inset #c0c0c0;padding:4px;font-size:11px;">
+                <small style="color:#666;font-size:10px;">Upload an image file for your token</small>
             </div>
             <div class="modal-buttons">
                 <div class="btn" onclick="hideCreateModal()">Cancel</div>
@@ -448,6 +449,64 @@
         let rooms = {
             'LPC': []
         };
+        let roomImages = {
+            'LPC': 'https://via.placeholder.com/32x32/FF6B35/FFFFFF?text=LPC'
+        };
+
+        // Simple storage simulation - in real app this would be a backend database
+        function saveToStorage() {
+            try {
+                localStorage.setItem('pumpChatRooms', JSON.stringify(rooms));
+                localStorage.setItem('pumpChatImages', JSON.stringify(roomImages));
+            } catch(e) {
+                // Storage not available, continue without persistence
+            }
+        }
+
+        function loadFromStorage() {
+            try {
+                const savedRooms = localStorage.getItem('pumpChatRooms');
+                const savedImages = localStorage.getItem('pumpChatImages');
+                if (savedRooms) {
+                    rooms = JSON.parse(savedRooms);
+                }
+                if (savedImages) {
+                    roomImages = JSON.parse(savedImages);
+                }
+            } catch(e) {
+                // Storage not available, use defaults
+            }
+        }
+
+        // Simulate real-time updates by checking for new messages periodically
+        function checkForUpdates() {
+            // In a real app, this would poll a server or use WebSockets
+            // For simulation, we'll check localStorage for changes from other tabs
+            try {
+                const savedRooms = localStorage.getItem('pumpChatRooms');
+                if (savedRooms) {
+                    const newRooms = JSON.parse(savedRooms);
+                    
+                    // Check if current room has new messages
+                    if (currentRoomName && newRooms[currentRoomName]) {
+                        const currentMessages = rooms[currentRoomName] || [];
+                        const newMessages = newRooms[currentRoomName] || [];
+                        
+                        if (newMessages.length > currentMessages.length) {
+                            // Update rooms and reload messages
+                            rooms = newRooms;
+                            loadMessages(currentRoomName);
+                            updateAllMessageCounts();
+                        }
+                    }
+                    
+                    // Update rooms data
+                    rooms = newRooms;
+                }
+            } catch(e) {
+                // Storage not available
+            }
+        }
 
         function updateTime() {
             const now = new Date();
@@ -516,18 +575,26 @@
                     minute: '2-digit' 
                 });
                 
+                // Generate a random username for demo (in real app, this would be user's wallet address or username)
+                const usernames = ['Anon', 'CryptoChad', 'MoonBoy', 'DiamondHands', 'ApeStrong', 'DegenKing', 'TokenMaster'];
+                const username = usernames[Math.floor(Math.random() * usernames.length)] + Math.floor(Math.random() * 1000);
+                
                 // Add to room data
                 if (!rooms[currentRoomName]) {
                     rooms[currentRoomName] = [];
                 }
                 rooms[currentRoomName].push({
-                    user: 'You',
+                    user: username,
                     message: message,
-                    time: timeStr
+                    time: timeStr,
+                    timestamp: Date.now()
                 });
                 
+                // Save to storage for persistence and sharing
+                saveToStorage();
+                
                 // Add to chat display
-                addMessageToChat('You', message, timeStr);
+                addMessageToChat(username, message, timeStr);
                 
                 // Update message count
                 updateMessageCount(currentRoomName);
@@ -546,12 +613,12 @@
             document.getElementById('overlay').style.display = 'none';
             document.getElementById('createModal').style.display = 'none';
             document.getElementById('tokenName').value = '';
-            document.getElementById('tokenImage').value = '';
+            document.getElementById('tokenImageFile').value = '';
         }
 
         function createRoom() {
             const tokenName = document.getElementById('tokenName').value.trim().toUpperCase();
-            const tokenImage = document.getElementById('tokenImage').value.trim();
+            const tokenImageFile = document.getElementById('tokenImageFile').files[0];
             
             if (tokenName) {
                 // Check if room already exists
@@ -560,44 +627,65 @@
                     return;
                 }
                 
-                // Add new room to the list
-                const roomList = document.getElementById('roomList');
-                const roomDiv = document.createElement('div');
-                roomDiv.className = 'room-item';
-                roomDiv.onclick = () => selectRoom(tokenName);
-                
-                const colors = ['#4CAF50', '#FFC107', '#FF5722', '#795548', '#9C27B0', '#2196F3'];
-                const randomColor = colors[Math.floor(Math.random() * colors.length)];
-                
-                let iconContent;
-                if (tokenImage && tokenImage.startsWith('http')) {
-                    iconContent = `<img src="${tokenImage}" alt="${tokenName}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+                // Handle image upload
+                if (tokenImageFile) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const imageDataUrl = e.target.result;
+                        createRoomWithImage(tokenName, imageDataUrl);
+                    };
+                    reader.readAsDataURL(tokenImageFile);
                 } else {
-                    iconContent = `<img src="https://via.placeholder.com/32x32/${randomColor.substring(1)}/FFFFFF?text=${tokenName.substring(0,3)}" alt="${tokenName}" style="width:100%;height:100%;border-radius:50%;">`;
+                    // Create room with placeholder image
+                    const colors = ['#4CAF50', '#FFC107', '#FF5722', '#795548', '#9C27B0', '#2196F3'];
+                    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+                    const placeholderImage = `https://via.placeholder.com/32x32/${randomColor.substring(1)}/FFFFFF?text=${tokenName.substring(0,3)}`;
+                    createRoomWithImage(tokenName, placeholderImage);
                 }
-                
-                roomDiv.innerHTML = `
-                    <div class="coin-icon" style="background: ${randomColor};">
-                        ${iconContent}
-                    </div>
-                    <div class="room-info">
-                        <h3>${tokenName}</h3>
-                        <small id="${tokenName.toLowerCase()}-count">0 messages • 🔴 Live</small>
-                    </div>
-                `;
-                
-                roomList.appendChild(roomDiv);
-                
-                // Initialize empty room
-                rooms[tokenName] = [];
-                
-                hideCreateModal();
-                
-                // Auto-select the new room
-                setTimeout(() => {
-                    roomDiv.click();
-                }, 100);
             }
+        }
+
+        function createRoomWithImage(tokenName, imageUrl) {
+            // Add new room to the list
+            const roomList = document.getElementById('roomList');
+            const roomDiv = document.createElement('div');
+            roomDiv.className = 'room-item';
+            roomDiv.onclick = () => selectRoom(tokenName);
+            
+            const colors = ['#4CAF50', '#FFC107', '#FF5722', '#795548', '#9C27B0', '#2196F3'];
+            const randomColor = colors[Math.floor(Math.random() * colors.length)];
+            
+            roomDiv.innerHTML = `
+                <div class="coin-icon" style="background: ${randomColor};">
+                    <img src="${imageUrl}" alt="${tokenName}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" onerror="this.src='https://via.placeholder.com/32x32/${randomColor.substring(1)}/FFFFFF?text=${tokenName.substring(0,3)}'">
+                </div>
+                <div class="room-info">
+                    <h3>${tokenName}</h3>
+                    <small id="${tokenName.toLowerCase()}-count">0 messages • 🔴 Live</small>
+                </div>
+            `;
+            
+            roomList.appendChild(roomDiv);
+            
+            // Initialize empty room and store image
+            rooms[tokenName] = [];
+            roomImages[tokenName] = imageUrl;
+            
+            // Save to storage
+            saveToStorage();
+            
+            hideCreateModal();
+            
+            // Auto-select the new room
+            setTimeout(() => {
+                roomDiv.click();
+            }, 100);
+        }
+
+        function updateAllMessageCounts() {
+            Object.keys(rooms).forEach(roomName => {
+                updateMessageCount(roomName);
+            });
         }
 
         function updateMessageCount(roomName) {
@@ -616,8 +704,43 @@
         });
 
         // Initialize
+        loadFromStorage(); // Load existing rooms and messages
         updateTime();
         setInterval(updateTime, 1000);
+        
+        // Check for new messages every 2 seconds (simulates real-time)
+        setInterval(checkForUpdates, 2000);
+        
+        // Load existing rooms into UI
+        function initializeRooms() {
+            const roomList = document.getElementById('roomList');
+            roomList.innerHTML = ''; // Clear existing
+            
+            Object.keys(rooms).forEach(roomName => {
+                const roomDiv = document.createElement('div');
+                roomDiv.className = 'room-item';
+                if (roomName === 'LPC') roomDiv.classList.add('active');
+                roomDiv.onclick = () => selectRoom(roomName);
+                
+                const colors = ['#FF6B35', '#4CAF50', '#FFC107', '#FF5722', '#795548', '#9C27B0', '#2196F3'];
+                const randomColor = colors[Math.floor(Math.random() * colors.length)];
+                const imageUrl = roomImages[roomName] || `https://via.placeholder.com/32x32/${randomColor.substring(1)}/FFFFFF?text=${roomName.substring(0,3)}`;
+                
+                roomDiv.innerHTML = `
+                    <div class="coin-icon" style="background: ${randomColor};">
+                        <img src="${imageUrl}" alt="${roomName}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" onerror="this.src='https://via.placeholder.com/32x32/${randomColor.substring(1)}/FFFFFF?text=${roomName.substring(0,3)}'">
+                    </div>
+                    <div class="room-info">
+                        <h3>${roomName}</h3>
+                        <small id="${roomName.toLowerCase()}-count">${rooms[roomName].length} messages • 🔴 Live</small>
+                    </div>
+                `;
+                
+                roomList.appendChild(roomDiv);
+            });
+        }
+        
+        initializeRooms();
         
         // Auto-select LPC room on load
         setTimeout(() => {
